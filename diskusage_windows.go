@@ -1,4 +1,7 @@
-//From https://pkg.go.dev/github.com/ricochet2200/go-disk-usage/du
+//go:build windows
+// +build windows
+
+//from https://github.com/ricochet2200/go-disk-usage/blob/master/LICENSE
 
 package main
 
