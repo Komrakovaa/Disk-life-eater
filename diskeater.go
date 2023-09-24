@@ -43,11 +43,11 @@ func path_free_space(path string) uint64 {
 
 func init_flags() flags {
 	var f flags
-	f.flagHelpPtr = flag.Bool("h", false, "Вывод информации об использовании программы.")
-	f.flagPatternSizePtr = flag.Uint("b", RND_PATTERN_SIZE, "Размер блока случайных данных для записи в байтах")
-	f.flagFileSizePtr = flag.Uint("s", FILE_SIZE, "Размер одного файла в байтах")
-	f.flagPrefixPtr = flag.String("p", PREFIX, "Префикс")
-	f.flagPathPtr = flag.String("path", PATH, "Путь")
+	f.flagHelpPtr = flag.Bool("h", false, "Help")
+	f.flagPatternSizePtr = flag.Uint("b", RND_PATTERN_SIZE, "Random pattern size, bytes")
+	f.flagFileSizePtr = flag.Uint("s", FILE_SIZE, "Junk file size")
+	f.flagPrefixPtr = flag.String("p", PREFIX, "Junk file prefix")
+	f.flagPathPtr = flag.String("path", PATH, "Path for writing junk files")
 	f.flagRemoveOnExit = flag.Bool("r", REMOVE_ON_EXIT, "Remove junk on exit")
 	f.flagMaxUsedSpace = flag.Uint64("m", MAX_USED_SPACE, "Maximum disk space to use(not implemented)")
 	flag.Parse()
@@ -155,6 +155,7 @@ func delete_rnd_file_with_prefix() {
 
 func run(quit chan bool) {
 	var file_count uint = 0
+	fmt.Println("Starting to write...")
 	for {
 		select {
 		case <-quit:
