@@ -16,14 +16,16 @@ type flags struct {
 	flagFileSizePtr    *uint
 	flagPathPtr        *string
 	flagRemoveOnExit   *bool
+	flagMaxUsedSpace   *uint64
 }
 
 var (
 	RND_PATTERN_SIZE uint   = 1024
 	PREFIX           string = "KILLSSD"
 	FILE_SIZE        uint   = 1073741824 //1 Gb
-	PATH             string = "e:/"
+	PATH             string = "G:/"
 	REMOVE_ON_EXIT   bool   = true
+	MAX_USED_SPACE   uint64 = 0
 )
 
 var pattern []byte
@@ -47,6 +49,7 @@ func init_flags() flags {
 	f.flagPrefixPtr = flag.String("p", PREFIX, "Префикс")
 	f.flagPathPtr = flag.String("path", PATH, "Путь")
 	f.flagRemoveOnExit = flag.Bool("r", REMOVE_ON_EXIT, "Remove junk on exit")
+	f.flagMaxUsedSpace = flag.Uint64("m", MAX_USED_SPACE, "Maximum disk space to use(not implemented)")
 	flag.Parse()
 	return f
 }
@@ -66,8 +69,8 @@ func init_pattern() {
 	pattern = make([]byte, RND_PATTERN_SIZE)
 	_, err := crand.Read(pattern)
 	if err != nil {
-		fmt.Println("error:", err)
-		return
+		fmt.Println("Random pattern init error:", err)
+		os.Exit(1)
 	}
 }
 
@@ -77,7 +80,8 @@ func write_pattern(fp *os.File, size uint) {
 	}
 	_, err := fp.Write(pattern[0:size])
 	if err != nil {
-		fmt.Println("Unable write to file:", err)
+		fmt.Println("Unable write to file:", fp.Name(), "-", err)
+		os.Exit(1)
 	} else {
 		bytes_count += int64(size)
 	}
@@ -87,7 +91,7 @@ func write_pattern(fp *os.File, size uint) {
 func create_junk_file(filename string, size uint) {
 	file, err := os.Create(filename)
 	if err != nil {
-		fmt.Println("Unable to create file:", err)
+		fmt.Println("Unable to create file:", filename, "-", err)
 		os.Exit(1)
 	}
 	defer file.Close()
@@ -113,14 +117,13 @@ func remove_all_junk() {
 			if strings.HasPrefix(file.Name(), PREFIX) {
 				err := os.Remove(PATH + file.Name())
 				if err != nil {
-					fmt.Println("Unable remove path:", file.Name(), "  ", err)
+					fmt.Println("Unable remove path:", file.Name(), "-", err)
 				}
 
 			}
 
 		}
 	}
-
 }
 
 func delete_rnd_file_with_prefix() {
@@ -128,7 +131,7 @@ func delete_rnd_file_with_prefix() {
 	files, err := os.ReadDir(PATH)
 
 	if err != nil {
-		fmt.Println("Unable list path:", err)
+		fmt.Println("Unable list path:", PATH, "-", err)
 		os.Exit(1)
 	}
 
@@ -140,9 +143,31 @@ func delete_rnd_file_with_prefix() {
 
 		}
 	}
+
 	file_to_remove := junk_files[mrand.Intn(len(junk_files))]
+
 	fmt.Println("Gonna delete...", file_to_remove)
-	os.Remove(PATH + file_to_remove)
+	err = os.Remove(PATH + file_to_remove)
+	if err != nil {
+		fmt.Println("Can`t delete:", file_to_remove, "-", err)
+	}
+}
+
+func run(quit chan bool) {
+	var file_count uint = 0
+	for {
+		select {
+		case <-quit:
+			return
+		default:
+			if path_free_space(PATH) < uint64(FILE_SIZE) {
+				delete_rnd_file_with_prefix()
+			}
+			create_junk_file(PATH+PREFIX+sprintf(file_count), FILE_SIZE)
+			fmt.Println("Total writed:", ByteCountDecimal(bytes_count))
+			file_count++
+		}
+	}
 }
 
 func main() {
@@ -154,29 +179,14 @@ func main() {
 	if *f.flagHelpPtr {
 		fmt.Println("Disk life Eater v0.1")
 		fmt.Println("github.com/Komrakovaa/Disk-life-eater")
+		fmt.Println("Usage: diskeater [flags]")
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
 	init_pattern()
 
 	quit := make(chan bool)
-	go func() {
-		var file_count uint = 0
-		for {
-			if path_free_space(PATH) < uint64(FILE_SIZE) {
-				delete_rnd_file_with_prefix()
-			}
-			create_junk_file(PATH+PREFIX+sprintf(file_count), FILE_SIZE)
-			fmt.Println("Total writed:", ByteCountDecimal(bytes_count))
-			file_count++
-			select {
-			case <-quit:
-				return
-			default:
-				// Do other stuff
-			}
-		}
-	}()
+	go run(quit)
 	fmt.Println("Press enter key to exit")
 	fmt.Scanln()
 
