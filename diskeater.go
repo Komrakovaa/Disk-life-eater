@@ -7,6 +7,7 @@ import (
 	mrand "math/rand"
 	"os"
 	"strings"
+	"time"
 )
 
 type flags struct {
@@ -20,10 +21,10 @@ type flags struct {
 }
 
 var (
-	RND_PATTERN_SIZE uint   = 1024
+	RND_PATTERN_SIZE uint   = 16384
 	PREFIX           string = "KILLSSD"
 	FILE_SIZE        uint   = 1073741824 //1 Gb
-	PATH             string = "G:/"
+	PATH             string = "/tmp/"
 	REMOVE_ON_EXIT   bool   = true
 	MAX_USED_SPACE   uint64 = 0
 )
@@ -164,8 +165,14 @@ func run(quit chan bool) {
 			if path_free_space(PATH) < uint64(FILE_SIZE) {
 				delete_rnd_file_with_prefix()
 			}
+
+			start := time.Now()
 			create_junk_file(PATH+PREFIX+sprintf(file_count), FILE_SIZE)
-			fmt.Println("Total writed:", ByteCountDecimal(bytes_count))
+			elapsed := time.Since(start)
+
+			speed := float64(FILE_SIZE) / elapsed.Seconds() / 1048576.0
+			fmt.Println("Total writed:", ByteCountDecimal(bytes_count), "Speed:", FloatToFixedPrec(speed, 2), "Mb/s")
+
 			file_count++
 		}
 	}
