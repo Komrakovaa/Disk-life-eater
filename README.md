@@ -11,10 +11,10 @@ Usage: diskeater [flags]
     - Random pattern size, bytes (default 1024).    
 - -h  
     - Help  
-- -m uint  
-    - Maximum disk space to use(not implemented)  
+- -rw bool
+    - Read after write
 - -p string  
-Junk file prefix (default "KILLSSD")  
+    - Junk file prefix (default "KILLSSD")  
 - -path string  
     - Path for writing junk files (default "/tmp/")  
 - -r  

@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"flag"
 	"fmt"
+	"io"
 	mrand "math/rand"
 	"os"
 	"strings"
@@ -17,7 +18,7 @@ type flags struct {
 	flagFileSizePtr    *uint
 	flagPathPtr        *string
 	flagRemoveOnExit   *bool
-	flagMaxUsedSpace   *uint64
+	flagReadAfterWrite *bool
 }
 
 var (
@@ -26,7 +27,7 @@ var (
 	FILE_SIZE        uint   = 1073741824 //1 Gb
 	PATH             string = "/tmp/"
 	REMOVE_ON_EXIT   bool   = true
-	MAX_USED_SPACE   uint64 = 0
+	READ_AFTER_WRITE bool   = false
 )
 
 var pattern []byte
@@ -50,7 +51,7 @@ func init_flags() flags {
 	f.flagPrefixPtr = flag.String("p", PREFIX, "Junk file prefix")
 	f.flagPathPtr = flag.String("path", PATH, "Path for writing junk files")
 	f.flagRemoveOnExit = flag.Bool("r", REMOVE_ON_EXIT, "Remove junk on exit")
-	f.flagMaxUsedSpace = flag.Uint64("m", MAX_USED_SPACE, "Maximum disk space to use(not implemented)")
+	f.flagReadAfterWrite = flag.Bool("rw", READ_AFTER_WRITE, "Read after write")
 	flag.Parse()
 	return f
 }
@@ -64,6 +65,7 @@ func init_params(f flags) {
 	PREFIX = *f.flagPrefixPtr
 	FILE_SIZE = *f.flagFileSizePtr
 	PATH = *f.flagPathPtr
+	READ_AFTER_WRITE = *f.flagReadAfterWrite
 }
 
 func init_pattern() {
@@ -87,6 +89,27 @@ func write_pattern(fp *os.File, size uint) {
 		bytes_count += int64(size)
 	}
 
+}
+
+func read_file(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println("Unable to open file for reading:", filename, "-", err)
+		return
+	}
+	defer file.Close()
+	data := make([]byte, RND_PATTERN_SIZE)
+
+	for {
+		_, err := file.Read(data)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			fmt.Println(err)
+			return
+		}
+	}
 }
 
 func create_junk_file(filename string, size uint) {
@@ -118,22 +141,20 @@ func remove_all_junk() {
 			if strings.HasPrefix(file.Name(), PREFIX) {
 				err := os.Remove(PATH + file.Name())
 				if err != nil {
-					fmt.Println("Unable remove path:", file.Name(), "-", err)
+					fmt.Println("Unable remove file:", file.Name(), "-", err)
 				}
-
 			}
-
 		}
 	}
 }
 
-func delete_rnd_file_with_prefix() {
+func delete_rnd_file_with_prefix() bool {
 	var junk_files []string
 	files, err := os.ReadDir(PATH)
 
 	if err != nil {
 		fmt.Println("Unable list path:", PATH, "-", err)
-		os.Exit(1)
+		return false
 	}
 
 	for _, file := range files {
@@ -145,12 +166,35 @@ func delete_rnd_file_with_prefix() {
 		}
 	}
 
+	if len(junk_files) == 0 {
+		return false
+	}
+
 	file_to_remove := junk_files[mrand.Intn(len(junk_files))]
 
 	fmt.Println("Gonna delete...", file_to_remove)
 	err = os.Remove(PATH + file_to_remove)
 	if err != nil {
 		fmt.Println("Can`t delete:", file_to_remove, "-", err)
+		return false
+	}
+	return true
+}
+
+func free_space() {
+	if !delete_rnd_file_with_prefix() {
+		os.Exit(1)
+	}
+
+	if path_free_space(PATH) < uint64(FILE_SIZE) {
+		if !delete_rnd_file_with_prefix() {
+			os.Exit(1)
+		}
+	}
+
+	if path_free_space(PATH) < uint64(FILE_SIZE) {
+		fmt.Println("Can`t free space.")
+		os.Exit(1)
 	}
 }
 
@@ -163,15 +207,21 @@ func run(quit chan bool) {
 			return
 		default:
 			if path_free_space(PATH) < uint64(FILE_SIZE) {
-				delete_rnd_file_with_prefix()
+				free_space()
 			}
+			junk_file_name := PATH + PREFIX + sprintf(file_count)
 
 			start := time.Now()
-			create_junk_file(PATH+PREFIX+sprintf(file_count), FILE_SIZE)
+			create_junk_file(junk_file_name, FILE_SIZE)
 			elapsed := time.Since(start)
 
 			speed := float64(FILE_SIZE) / elapsed.Seconds() / 1048576.0
 			fmt.Println("Total writed:", ByteCountDecimal(bytes_count), "Speed:", FloatToFixedPrec(speed, 2), "Mb/s")
+
+			if READ_AFTER_WRITE {
+				fmt.Println("Read file...")
+				read_file(junk_file_name)
+			}
 
 			file_count++
 		}
